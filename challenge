@@ -1,0 +1,88 @@
+Sub CreateOutlookEmailsFromChallenges()
+    Dim ws As Worksheet
+    Dim olApp As Object
+    Dim olMail As Object
+    Dim dict As Object
+    Dim lastRow As Long, lastCol As Long
+    Dim rowData As String, headerRow As String
+    Dim emailBody As String
+    Dim recipient As String
+    Dim uniqueValue As String
+    Dim i As Long
+    Dim prevMonth As String
+    Dim currentDate As Date
+
+    ' Get previous month name
+    currentDate = Date
+    prevMonth = Format(DateSerial(Year(currentDate), Month(currentDate) - 1, 1), "MMMM")
+
+    ' Set worksheet
+    Set ws = ThisWorkbook.Sheets("Challenges")
+    
+    ' Find the last row and last column
+    lastRow = ws.Cells(ws.Rows.Count, "G").End(xlUp).Row
+    lastCol = ws.Cells(1, ws.Columns.Count).End(xlToLeft).Column
+
+    ' Create a dictionary to store unique recipients
+    Set dict = CreateObject("Scripting.Dictionary")
+
+    ' Loop through column G to find unique recipients
+    For i = 2 To lastRow
+        recipient = ws.Cells(i, 7).Value ' Column G (Email Address)
+        If Not dict.exists(recipient) And recipient <> "" Then
+            dict.Add recipient, i
+        End If
+    Next i
+
+    ' Initialize Outlook
+    On Error Resume Next
+    Set olApp = GetObject(, "Outlook.Application")
+    If olApp Is Nothing Then Set olApp = CreateObject("Outlook.Application")
+    On Error GoTo 0
+
+    ' Get header row values
+    headerRow = "<tr style='background-color:#f2f2f2;font-weight:bold;'>"
+    For i = 1 To lastCol
+        headerRow = headerRow & "<td style='border: 1px solid black; padding: 5px;'>" & ws.Cells(1, i).Value & "</td>"
+    Next i
+    headerRow = headerRow & "</tr>"
+
+    ' Loop through unique recipients and create emails
+    For Each recipient In dict.keys
+        ' Ensure recipient is a valid email
+        If InStr(1, recipient, "@") > 0 Then
+            rowData = "<tr>"
+            For i = 1 To lastCol
+                rowData = rowData & "<td style='border: 1px solid black; padding: 5px;'>" & ws.Cells(dict(recipient), i).Value & "</td>"
+            Next i
+            rowData = rowData & "</tr>"
+
+            ' Construct email body as a table
+            emailBody = "<html><body>"
+            emailBody = emailBody & "<p>Hello,</p>"
+            emailBody = emailBody & "<p>Here is the relevant information:</p>"
+            emailBody = emailBody & "<table style='border-collapse: collapse; width: 100%; border: 1px solid black;'>" & headerRow & rowData & "</table>"
+            emailBody = emailBody & "<p>Best regards,<br>Your Name</p></body></html>"
+
+            ' Create and populate the email
+            Set olMail = olApp.CreateItem(0)
+            With olMail
+                .SentOnBehalfOfName = "your-email@domain.com" ' Replace with your delegated email
+                .To = recipient  ' Sets the recipient from Column G
+                .CC = ""  ' Set CC if needed
+                .BCC = "" ' Set BCC if needed
+                .Subject = prevMonth & " Client Bond Mark Challenges" ' Subject set to previous month
+                .HTMLBody = emailBody
+                .Display ' Use .Send to send automatically
+            End With
+        End If
+    Next recipient
+
+    ' Cleanup
+    Set olMail = Nothing
+    Set olApp = Nothing
+    Set dict = Nothing
+
+    MsgBox "Emails created successfully!", vbInformation
+
+End Sub
