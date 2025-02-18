@@ -7,8 +7,7 @@ Sub CreateOutlookEmailsFromChallenges()
     Dim rowData As String, headerRow As String
     Dim emailBody As String
     Dim recipient As String
-    Dim uniqueValue As String
-    Dim i As Long
+    Dim i As Long, j As Long
     Dim prevMonth As String
     Dim currentDate As Date
 
@@ -23,14 +22,18 @@ Sub CreateOutlookEmailsFromChallenges()
     lastRow = ws.Cells(ws.Rows.Count, "G").End(xlUp).Row
     lastCol = ws.Cells(1, ws.Columns.Count).End(xlToLeft).Column
 
-    ' Create a dictionary to store unique recipients
+    ' Create a dictionary to store unique recipients and their corresponding row numbers
     Set dict = CreateObject("Scripting.Dictionary")
 
-    ' Loop through column G to find unique recipients
+    ' Loop through column G to find unique recipients and store row numbers
     For i = 2 To lastRow
         recipient = ws.Cells(i, 7).Value ' Column G (Email Address)
-        If Not dict.exists(recipient) And recipient <> "" Then
-            dict.Add recipient, i
+        If recipient <> "" Then
+            If dict.exists(recipient) Then
+                dict(recipient) = dict(recipient) & "," & i
+            Else
+                dict.Add recipient, i
+            End If
         End If
     Next i
 
@@ -42,40 +45,44 @@ Sub CreateOutlookEmailsFromChallenges()
 
     ' Get header row values
     headerRow = "<tr style='background-color:#f2f2f2;font-weight:bold;'>"
-    For i = 1 To lastCol
-        headerRow = headerRow & "<td style='border: 1px solid black; padding: 5px;'>" & ws.Cells(1, i).Value & "</td>"
-    Next i
+    For j = 1 To lastCol
+        headerRow = headerRow & "<td style='border: 1px solid black; padding: 5px;'>" & ws.Cells(1, j).Value & "</td>"
+    Next j
     headerRow = headerRow & "</tr>"
 
     ' Loop through unique recipients and create emails
     For Each recipient In dict.keys
-        ' Ensure recipient is a valid email
-        If InStr(1, recipient, "@") > 0 Then
-            rowData = "<tr>"
-            For i = 1 To lastCol
-                rowData = rowData & "<td style='border: 1px solid black; padding: 5px;'>" & ws.Cells(dict(recipient), i).Value & "</td>"
-            Next i
+        rowData = "" ' Reset rowData for each recipient
+
+        ' Get all row numbers for the recipient
+        Dim rowNums As Variant
+        rowNums = Split(dict(recipient), ",")
+
+        ' Loop through each row for the recipient and add data to email
+        For i = LBound(rowNums) To UBound(rowNums)
+            rowData = rowData & "<tr>"
+            For j = 1 To lastCol
+                rowData = rowData & "<td style='border: 1px solid black; padding: 5px;'>" & ws.Cells(CInt(rowNums(i)), j).Value & "</td>"
+            Next j
             rowData = rowData & "</tr>"
+        Next i
 
-            ' Construct email body as a table
-            emailBody = "<html><body>"
-            emailBody = emailBody & "<p>Hello,</p>"
-            emailBody = emailBody & "<p>Here is the relevant information:</p>"
-            emailBody = emailBody & "<table style='border-collapse: collapse; width: 100%; border: 1px solid black;'>" & headerRow & rowData & "</table>"
-            emailBody = emailBody & "<p>Best regards,<br>Your Name</p></body></html>"
+        ' Construct email body as a table
+        emailBody = "<html><body>"
+        emailBody = emailBody & "<p>Hello,</p>"
+        emailBody = emailBody & "<p>Here is the relevant information:</p>"
+        emailBody = emailBody & "<table style='border-collapse: collapse; width: 100%; border: 1px solid black;'>" & headerRow & rowData & "</table>"
+        emailBody = emailBody & "<p>Best regards,<br>Your Name</p></body></html>"
 
-            ' Create and populate the email
-            Set olMail = olApp.CreateItem(0)
-            With olMail
-                .SentOnBehalfOfName = "your-email@domain.com" ' Replace with your delegated email
-                .To = recipient  ' Sets the recipient from Column G
-                .CC = ""  ' Set CC if needed
-                .BCC = "" ' Set BCC if needed
-                .Subject = prevMonth & " Client Bond Mark Challenges" ' Subject set to previous month
-                .HTMLBody = emailBody
-                .Display ' Use .Send to send automatically
-            End With
-        End If
+        ' Create and populate the email
+        Set olMail = olApp.CreateItem(0)
+        With olMail
+            .SentOnBehalfOfName = "your-email@domain.com" ' Replace with your delegated email
+            .To = recipient  ' Uses Column G as the recipient
+            .Subject = prevMonth & " Client Bond Mark Challenges" ' Set subject to previous month
+            .HTMLBody = emailBody
+            .Display ' Use .Send to send automatically
+        End With
     Next recipient
 
     ' Cleanup
